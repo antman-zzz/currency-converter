@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>世界通貨両替計算機</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header>
+        <h1>世界通貨両替計算機</h1>
+    </header>
+
+    <main>
+        <section id="converter">
+            <h2>両替計算</h2>
+            <form id="calculator-form">
+                <input type="number" id="amount-input" value="100" min="0" step="any">
+                <select id="currency-select"></select>
+                <input type="date" id="date-input">
+                <p>=
+                    <span id="result-output">...</span>
+                    <span id="result-currency">JPY</span>
+                </p>
+            </form>
+        </section>
+
+        <section id="chart-container">
+            <h2>為替チャート (JPY)</h2>
+            <div class="chart-controls">
+                <label for="start-date">開始日:</label>
+                <input type="date" id="start-date">
+                <label for="end-date">終了日:</label>
+                <input type="date" id="end-date">
+                <button id="update-chart">更新</button>
+            </div>
+            <canvas id="rateChart"></canvas>
+        </section>
+
+        <section id="currency-selection">
+            <h2>通貨を選択</h2>
+            <div id="currency-grid"></div>
+            <!-- 大陸別リストがここに入ります -->
+        </section>
+    </main>
+
+    <footer>
+        <p>Powered by <a href="https://exchangerate.host/" target="_blank">Exchange Rate API</a></p>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+
+    <a href="#chart-container" id="goto-chart-btn" title="チャートへ移動">グラフ</a>
+</body>
+</html>

@@ -1,0 +1,212 @@
+/* グローバルリセット */
+* {
+    box-sizing: border-box;
+}
+
+/* 全体設定 */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    background-color: #f4f7f9;
+    color: #333;
+}
+
+header {
+    background-color: #fff;
+    padding: 1rem;
+    border-bottom: 1px solid #ddd;
+    text-align: center;
+}
+
+h1 {
+    margin: 0;
+    color: #2c3e50;
+}
+
+main {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+section {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+#converter {
+    position: -webkit-sticky; /* Safari対応 */
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1); /* 影を少し強くして浮いている感を出す */
+}
+
+h2 {
+    margin-top: 0;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 0.5rem;
+    color: #34495e;
+}
+
+/* 計算フォーム */
+#calculator-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem;
+}
+
+#calculator-form input,
+#calculator-form select {
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+}
+
+#calculator-form p {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0;
+    color: #27ae60;
+}
+
+/* チャート */
+.chart-controls {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+/* 通貨選択グリッド */
+#currency-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+}
+
+.continent-section > summary {
+    font-size: 1.2rem;
+    font-weight: bold;
+    cursor: pointer;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 1rem;
+}
+
+.continent-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.currency-item {
+    padding: 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.currency-item:hover {
+    background-color: #ecf0f1;
+}
+
+
+
+.currency-item .code {
+    color: #7f8c8d;
+}
+
+/* フッター */
+footer {
+    text-align: center;
+    padding: 1rem;
+    color: #777;
+    font-size: 0.9rem;
+}
+
+footer a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+    #calculator-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); /* はみ出し防止 */
+        grid-template-areas:
+            "amount   currency"
+            "date     date"
+            "result   result";
+        gap: 0.75rem; /* 要素間の隙間 */
+    }
+
+    #calculator-form > #amount-input,
+    #calculator-form > #currency-select,
+    #calculator-form > #date-input {
+        width: 100%; /* グリッドエリアの幅に合わせる */
+        min-width: 0; /* 暗黙の最小幅をリセット */
+    }
+
+    #calculator-form > #amount-input {
+        grid-area: amount;
+    }
+    #calculator-form > #currency-select {
+        grid-area: currency;
+    }
+    #calculator-form > #date-input {
+        grid-area: date;
+    }
+    #calculator-form > p {
+        grid-area: result;
+        text-align: center;
+        margin: 0.5rem 0 0 0; /* 上の隙間を少し調整 */
+    }
+
+    #currency-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .continent-section {
+        margin-bottom: 1rem;
+    }
+}
+
+/* チャートへ移動ボタン */
+#goto-chart-btn {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1001; /* converterより上 */
+    background-color: #3498db;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    font-size: 14px;
+    font-weight: bold;
+    text-align: center;
+    line-height: 60px; /* 上下中央揃え */
+    text-decoration: none;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    transition: background-color 0.3s;
+}
+
+#goto-chart-btn:hover {
+    background-color: #2980b9;
+}
