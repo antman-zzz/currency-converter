@@ -173,7 +173,6 @@ document.addEventListener('DOMContentLoaded', () => {
     endDateInput.value = formatDate(today);
 
     // --- 通貨リストの生成 ---
-    // (コードは変更なし、省略)
     const currenciesByContinent = currencies.reduce((acc, currency) => {
         if (!acc[currency.continent]) { acc[currency.continent] = []; }
         acc[currency.continent].push(currency);
@@ -204,7 +203,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 item.dataset.code = currency.code;
                 item.innerHTML = `${currency.name} <span class="code">${currency.code}</span>`;
                 item.addEventListener('click', () => {
-                    // プルダウンに存在しない通貨であれば、動的に追加する
                     let optionExists = false;
                     for (let i = 0; i < currencySelect.options.length; i++) {
                         if (currencySelect.options[i].value === currency.code) {
@@ -230,20 +228,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- 為替レート計算 ---
-    const getRate = async (currency, date) => {
+    // --- 為替レート計算 (Yahoo Finance API) ---
+    const getRate = async (currency) => {
         resultOutput.textContent = '計算中...';
-        const endpoint = date === formatDate(new Date()) ? 'latest' : date;
-        const url = `https://api.exchangerate.host/${endpoint}?base=${currency}&symbols=JPY`;
+        // Yahoo Financeの非公式APIを使用。常に最新のレートを取得します。
+        const pair = `${currency}JPY=X`;
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${pair}`;
+
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error('ネットワークエラー');
             const data = await response.json();
-            if (!data.success || !data.rates || !data.rates.JPY) throw new Error('有効なレートを取得できませんでした。');
-            return data.rates.JPY;
+            
+            if (!data.chart.result || !data.chart.result[0].meta.regularMarketPrice) {
+                throw new Error('有効なレートを取得できませんでした。');
+            }
+            return data.chart.result[0].meta.regularMarketPrice;
         } catch (error) {
             console.error('APIエラー:', error);
-            resultOutput.textContent = 'エラー';
+            resultOutput.textContent = '取得不可'; // エラーメッセージを具体的に
             return null;
         }
     };
@@ -251,7 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const calculateRate = async () => {
         const amount = parseFloat(amountInput.value);
         const currency = currencySelect.value;
-        const date = dateInput.value;
+        // const date = dateInput.value; // 日付指定は使わないためコメントアウト
         if (isNaN(amount) || amount < 0) {
             resultOutput.textContent = '---';
             return;
@@ -260,17 +263,17 @@ document.addEventListener('DOMContentLoaded', () => {
             resultOutput.textContent = amount.toLocaleString();
             return;
         }
-        const rate = await getRate(currency, date);
+        const rate = await getRate(currency);
         if (rate) {
             const result = amount * rate;
             resultOutput.textContent = result.toLocaleString(undefined, { maximumFractionDigits: 2 });
         }
     };
 
-    // --- チャート処理 ---
+    // --- チャート処理 (Yahoo Finance API) ---
     const drawChart = (labels, data, currency) => {
         if (rateChart) {
-            rateChart.destroy(); // 既存のチャートを破棄
+            rateChart.destroy();
         }
         rateChart = new Chart(chartCanvas, {
             type: 'line',
@@ -297,19 +300,40 @@ document.addEventListener('DOMContentLoaded', () => {
             drawChart([start, end], [1, 1], currency);
             return;
         }
-        const url = `https://api.exchangerate.host/timeseries?start_date=${start}&end_date=${end}&base=${currency}&symbols=JPY`;
+        const pair = `${currency}JPY=X`;
+        const startDate = new Date(start);
+        const endDate = new Date(end);
+        const period1 = Math.floor(startDate.getTime() / 1000);
+        const period2 = Math.floor(endDate.getTime() / 1000);
+
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${pair}?period1=${period1}&period2=${period2}&interval=1d`;
+
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error('ネットワークエラー');
             const data = await response.json();
-            if (!data.success) throw new Error('チャートデータの取得に失敗しました。');
+
+            if (!data.chart.result || !data.chart.result[0].timestamp) {
+                drawChart([], [], currency); // データがない場合は空のグラフを描画
+                throw new Error('チャートデータの取得に失敗しました。');
+            }
+
+            const result = data.chart.result[0];
+            const labels = result.timestamp.map(ts => formatDate(new Date(ts * 1000)));
+            const rates = result.indicators.quote[0].close;
             
-            const labels = Object.keys(data.rates).sort();
-            const rates = labels.map(label => data.rates[label].JPY);
-            drawChart(labels, rates, currency);
+            const filteredLabels = [];
+            const filteredRates = [];
+            for(let i = 0; i < rates.length; i++) {
+                if (rates[i] !== null) {
+                    filteredLabels.push(labels[i]);
+                    filteredRates.push(rates[i]);
+                }
+            }
+
+            drawChart(filteredLabels, filteredRates, currency);
         } catch (error) {
             console.error('チャートAPIエラー:', error);
-            // エラー時、グラフをクリアするなどの処理も可能
         }
     };
 
@@ -322,8 +346,9 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchChartData(currency, startDate, endDate);
     };
 
+    // 日付の変更はグラフにのみ反映させる
     amountInput.addEventListener('input', calculateRate);
-    dateInput.addEventListener('change', calculateRate);
+    dateInput.addEventListener('change', handleCalculationAndChartUpdate); // グラフのために残す
     currencySelect.addEventListener('change', handleCalculationAndChartUpdate);
     updateChartBtn.addEventListener('click', () => {
         const currency = currencySelect.value;
@@ -338,7 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- チャートへ移動ボタンの処理 ---
     const gotoChartBtn = document.getElementById('goto-chart-btn');
     const chartContainer = document.getElementById('chart-container');
-    const converterSection = document.getElementById('converter'); // 固定ヘッダー
+    const converterSection = document.getElementById('converter');
 
     gotoChartBtn.addEventListener('click', (event) => {
         event.preventDefault();
@@ -353,4 +378,3 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 });
-
