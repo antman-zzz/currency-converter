@@ -228,24 +228,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- 為替レート計算 (Yahoo Finance API) ---
+    // --- 為替レート計算 (Frankfurter API) ---
     const getRate = async (currency) => {
         resultOutput.textContent = '計算中...';
-        // Yahoo Financeの非公式APIを使用。常に最新のレートを取得します。
-        const pair = `${currency}JPY=X`;
-        // CORS回避のためプロキシを使用
-        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-        const url = `${proxyUrl}https://query1.finance.yahoo.com/v8/finance/chart/${pair}`;
+        const url = `https://api.frankfurter.app/latest?from=${currency}&to=JPY`;
 
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error('ネットワークエラー');
             const data = await response.json();
             
-            if (!data.chart.result || !data.chart.result[0].meta || !data.chart.result[0].meta.regularMarketPrice) {
+            if (!data.rates || !data.rates.JPY) {
                 throw new Error('有効なレートを取得できませんでした。');
             }
-            return data.chart.result[0].meta.regularMarketPrice;
+            return data.rates.JPY;
         } catch (error) {
             console.error('APIエラー:', error);
             resultOutput.textContent = '取得不可';
@@ -271,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- チャート処理 (Yahoo Finance API) ---
+    // --- チャート処理 (Frankfurter API) ---
     const drawChart = (labels, data, currency) => {
         if (rateChart) {
             rateChart.destroy();
@@ -301,39 +297,23 @@ document.addEventListener('DOMContentLoaded', () => {
             drawChart([start, end], [1, 1], currency);
             return;
         }
-        const pair = `${currency}JPY=X`;
-        const startDate = new Date(start);
-        const endDate = new Date(end);
-        const period1 = Math.floor(startDate.getTime() / 1000);
-        const period2 = Math.floor(endDate.getTime() / 1000);
-
-        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
-        const url = `${proxyUrl}https://query1.finance.yahoo.com/v8/finance/chart/${pair}?period1=${period1}&period2=${period2}&interval=1d`;
+        const url = `https://api.frankfurter.app/${start}..${end}?from=${currency}&to=JPY`;
 
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error('ネットワークエラー');
             const data = await response.json();
 
-            if (!data.chart.result || !data.chart.result[0].timestamp) {
+            if (!data.rates) {
                 drawChart([], [], currency);
                 throw new Error('チャートデータの取得に失敗しました。');
             }
 
-            const result = data.chart.result[0];
-            const labels = result.timestamp.map(ts => formatDate(new Date(ts * 1000)));
-            const rates = result.indicators.quote[0].close;
-            
-            const filteredLabels = [];
-            const filteredRates = [];
-            for(let i = 0; i < rates.length; i++) {
-                if (rates[i] !== null) {
-                    filteredLabels.push(labels[i]);
-                    filteredRates.push(rates[i]);
-                }
-            }
+            const rates = data.rates;
+            const labels = Object.keys(rates).sort();
+            const chartData = labels.map(label => rates[label].JPY);
 
-            drawChart(filteredLabels, filteredRates, currency);
+            drawChart(labels, chartData, currency);
         } catch (error) {
             console.error('チャートAPIエラー:', error);
         }
