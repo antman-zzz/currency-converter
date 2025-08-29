@@ -233,20 +233,22 @@ document.addEventListener('DOMContentLoaded', () => {
         resultOutput.textContent = '計算中...';
         // Yahoo Financeの非公式APIを使用。常に最新のレートを取得します。
         const pair = `${currency}JPY=X`;
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${pair}`;
+        // CORS回避のためプロキシを使用
+        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        const url = `${proxyUrl}https://query1.finance.yahoo.com/v8/finance/chart/${pair}`;
 
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error('ネットワークエラー');
             const data = await response.json();
             
-            if (!data.chart.result || !data.chart.result[0].meta.regularMarketPrice) {
+            if (!data.chart.result || !data.chart.result[0].meta || !data.chart.result[0].meta.regularMarketPrice) {
                 throw new Error('有効なレートを取得できませんでした。');
             }
             return data.chart.result[0].meta.regularMarketPrice;
         } catch (error) {
             console.error('APIエラー:', error);
-            resultOutput.textContent = '取得不可'; // エラーメッセージを具体的に
+            resultOutput.textContent = '取得不可';
             return null;
         }
     };
@@ -254,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const calculateRate = async () => {
         const amount = parseFloat(amountInput.value);
         const currency = currencySelect.value;
-        // const date = dateInput.value; // 日付指定は使わないためコメントアウト
         if (isNaN(amount) || amount < 0) {
             resultOutput.textContent = '---';
             return;
@@ -306,7 +307,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const period1 = Math.floor(startDate.getTime() / 1000);
         const period2 = Math.floor(endDate.getTime() / 1000);
 
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${pair}?period1=${period1}&period2=${period2}&interval=1d`;
+        const proxyUrl = 'https://cors-anywhere.herokuapp.com/';
+        const url = `${proxyUrl}https://query1.finance.yahoo.com/v8/finance/chart/${pair}?period1=${period1}&period2=${period2}&interval=1d`;
 
         try {
             const response = await fetch(url);
@@ -314,7 +316,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (!data.chart.result || !data.chart.result[0].timestamp) {
-                drawChart([], [], currency); // データがない場合は空のグラフを描画
+                drawChart([], [], currency);
                 throw new Error('チャートデータの取得に失敗しました。');
             }
 
@@ -346,9 +348,8 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchChartData(currency, startDate, endDate);
     };
 
-    // 日付の変更はグラフにのみ反映させる
     amountInput.addEventListener('input', calculateRate);
-    dateInput.addEventListener('change', handleCalculationAndChartUpdate); // グラフのために残す
+    dateInput.addEventListener('change', handleCalculationAndChartUpdate);
     currencySelect.addEventListener('change', handleCalculationAndChartUpdate);
     updateChartBtn.addEventListener('click', () => {
         const currency = currencySelect.value;
