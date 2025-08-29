@@ -229,41 +229,72 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- 為替レート計算 (Frankfurter API) ---
-    const getRate = async (currency) => {
-        resultOutput.textContent = '計算中...';
-        const url = `https://api.frankfurter.app/latest?from=${currency}&to=JPY`;
-
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('ネットワークエラー');
-            const data = await response.json();
-            
-            if (!data.rates || !data.rates.JPY) {
-                throw new Error('有効なレートを取得できませんでした。');
+    async function getRate(fromCurrency, toCurrency, date = 'latest') {
+    try {
+        const url = `https://api.frankfurter.app/${date}?from=${fromCurrency}&to=${toCurrency}`;
+        const response = await fetch(url);
+        if (!response.ok) {
+            if (response.status === 404) {
+                throw new Error(`選択された通貨の換算は利用できません: ${fromCurrency} から ${toCurrency}`);
             }
-            return data.rates.JPY;
-        } catch (error) {
-            console.error('APIエラー:', error);
-            resultOutput.textContent = '取得不可';
-            return null;
+            throw new Error('ネットワークエラー');
         }
-    };
+        const data = await response.json();
+        return data.rates[toCurrency];
+    } catch (error) {
+        displayErrorMessage(`APIエラー: ${error.message}`);
+        throw error; // Re-throw to propagate the error to the caller
+    }
+}
+
+// Add a function to display error messages
+function displayErrorMessage(message) {
+    const errorMessageElement = document.getElementById('errorMessage');
+    if (errorMessageElement) {
+        errorMessageElement.textContent = message;
+        errorMessageElement.style.display = 'block';
+    } else {
+        console.error("Error message element not found:", message);
+    }
+}
+
+// Clear error message
+function clearErrorMessage() {
+    const errorMessageElement = document.getElementById('errorMessage');
+    if (errorMessageElement) {
+        errorMessageElement.textContent = '';
+        errorMessageElement.style.display = 'none';
+    }
+}
 
     const calculateRate = async () => {
+        clearErrorMessage(); // Clear previous errors
         const amount = parseFloat(amountInput.value);
-        const currency = currencySelect.value;
-        if (isNaN(amount) || amount < 0) {
-            resultOutput.textContent = '---';
+        const fromCurrency = currencySelect.value; // This is the 'from' currency
+        const toCurrency = 'JPY'; // Always convert to JPY
+        const selectedDate = dateInput.value; // Get the selected date
+
+        if (isNaN(amount) || amount <= 0) {
+            resultOutput.textContent = '有効な金額を入力してください';
             return;
         }
-        if (currency === 'JPY') {
-            resultOutput.textContent = amount.toLocaleString();
+
+        if (fromCurrency === toCurrency) {
+            resultOutput.textContent = amount.toLocaleString(undefined, { maximumFractionDigits: 2 });
             return;
         }
-        const rate = await getRate(currency);
-        if (rate) {
-            const result = amount * rate;
-            resultOutput.textContent = result.toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+        try {
+            const rate = await getRate(fromCurrency, toCurrency, selectedDate); // Pass the selected date
+            if (rate) {
+                const result = amount * rate;
+                resultOutput.textContent = result.toLocaleString(undefined, { maximumFractionDigits: 2 });
+            } else {
+                resultOutput.textContent = 'レートを取得できませんでした。';
+            }
+        } catch (error) {
+            // Error already displayed by displayErrorMessage in getRate
+            resultOutput.textContent = '計算できませんでした。';
         }
     };
 
@@ -292,40 +323,50 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const fetchChartData = async (currency, start, end) => {
-        if (currency === 'JPY') {
-            drawChart([start, end], [1, 1], currency);
+    const fetchChartData = async (fromCurrency, start, end) => { // Renamed currency to fromCurrency for clarity
+        clearErrorMessage(); // Clear previous errors
+        const toCurrency = 'JPY'; // Always convert to JPY for chart
+
+        if (fromCurrency === toCurrency) {
+            drawChart([start, end], [1, 1], fromCurrency);
             return;
         }
-        const url = `https://api.frankfurter.app/${start}..${end}?from=${currency}&to=JPY`;
+
+        const url = `https://api.frankfurter.app/${start}..${end}?from=${fromCurrency}&to=${toCurrency}`;
 
         try {
             const response = await fetch(url);
-            if (!response.ok) throw new Error('ネットワークエラー');
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error(`選択された通貨のチャートデータは利用できません: ${fromCurrency} から ${toCurrency}`);
+                }
+                throw new Error('ネットワークエラー');
+            }
             const data = await response.json();
 
             if (!data.rates) {
-                drawChart([], [], currency);
+                drawChart([], [], fromCurrency);
                 throw new Error('チャートデータの取得に失敗しました。');
             }
 
             const rates = data.rates;
             const labels = Object.keys(rates).sort();
-            const chartData = labels.map(label => rates[label].JPY);
+            const chartData = labels.map(label => rates[label][toCurrency]); // Use toCurrency here
 
-            drawChart(labels, chartData, currency);
+            drawChart(labels, chartData, fromCurrency);
         } catch (error) {
-            console.error('チャートAPIエラー:', error);
+            displayErrorMessage(`チャートAPIエラー: ${error.message}`);
+            // console.error('チャートAPIエラー:', error); // Remove this as displayErrorMessage handles it
         }
     };
 
     // --- イベントハンドラ ---
     const handleCalculationAndChartUpdate = () => {
         calculateRate();
-        const currency = currencySelect.value;
+        const fromCurrency = currencySelect.value; // Get the 'from' currency
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
-        fetchChartData(currency, startDate, endDate);
+        fetchChartData(fromCurrency, startDate, endDate); // Pass fromCurrency
     };
 
     amountInput.addEventListener('input', calculateRate);
