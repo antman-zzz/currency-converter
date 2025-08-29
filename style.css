@@ -84,6 +84,11 @@ h2 {
     flex-wrap: wrap;
 }
 
+.chart-wrapper {
+    position: relative;
+    height: 400px;
+}
+
 /* 通貨選択グリッド */
 #currency-grid {
     display: grid;
