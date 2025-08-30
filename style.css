@@ -232,3 +232,10 @@ footer a:hover {
 #goto-chart-btn:hover {
     background-color: #2980b9;
 }
+
+/* PCサイズでの通貨一覧を4列表示に */
+@media (min-width: 1024px) {
+    #currency-grid {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
