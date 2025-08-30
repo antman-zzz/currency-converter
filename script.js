@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- 定数・変数 ---
-    const currencies = [
+    const initialCurrencies = [
         // 主要通貨
         { code: 'JPY', name: '日本', flag: '🇯🇵', continent: 'アジア', major: true },
         { code: 'USD', name: 'アメリカ', flag: '🇺🇸', continent: '北米', major: true },
@@ -149,6 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
         { code: 'WST', name: 'サモア', flag: '🇼🇸', continent: '中東・オセアニア' },
     ];
     let rateChart;
+    let currencies = [];
 
     // --- DOM要素の取得 ---
     const amountInput = document.getElementById('amount-input');
@@ -160,9 +161,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDateInput = document.getElementById('start-date');
     const endDateInput = document.getElementById('end-date');
     const updateChartBtn = document.getElementById('update-chart');
-    const chartWrapper = document.querySelector('.chart-wrapper');
-    const chartUnavailableMessageDiv = document.getElementById('chart-unavailable-message');
-    const supportedCurrenciesList = document.getElementById('supported-currencies-list');
 
     // --- 初期設定 ---
     const today = new Date();
@@ -175,85 +173,11 @@ document.addEventListener('DOMContentLoaded', () => {
     startDateInput.value = formatDate(thirtyDaysAgo);
     endDateInput.value = formatDate(today);
 
-    // --- 通貨リストの生成 ---
-    const currenciesByContinent = currencies.reduce((acc, currency) => {
-        if (!acc[currency.continent]) { acc[currency.continent] = []; }
-        acc[currency.continent].push(currency);
-        return acc;
-    }, {});
-    const majorCurrencies = currencies.filter(c => c.major);
-    majorCurrencies.forEach(currency => {
-        const option = document.createElement('option');
-        option.value = currency.code;
-        option.textContent = `${currency.name} (${currency.code})`;
-        if (currency.code === 'USD') { option.selected = true; }
-        currencySelect.appendChild(option);
-    });
-    const continentOrder = ['アジア', 'ヨーロッパ', '北米', '中南米', 'アフリカ', '中東・オセアニア'];
-    continentOrder.forEach(continent => {
-        if (currenciesByContinent[continent]) {
-            const continentWrapper = document.createElement('details');
-            continentWrapper.classList.add('continent-section');
-            
-
-            const continentTitle = document.createElement('summary');
-            continentTitle.textContent = continent;
-            continentWrapper.appendChild(continentTitle);
-            const currencyList = document.createElement('ul');
-            currenciesByContinent[continent].forEach(currency => {
-                const item = document.createElement('li');
-                item.classList.add('currency-item');
-                item.dataset.code = currency.code;
-                item.innerHTML = `${currency.name} <span class="code">${currency.code}</span>`;
-                item.addEventListener('click', () => {
-                    let optionExists = false;
-                    for (let i = 0; i < currencySelect.options.length; i++) {
-                        if (currencySelect.options[i].value === currency.code) {
-                            optionExists = true;
-                            break;
-                        }
-                    }
-
-                    if (!optionExists) {
-                        const option = document.createElement('option');
-                        option.value = currency.code;
-                        option.textContent = `${currency.name} (${currency.code})`;
-                        currencySelect.appendChild(option);
-                    }
-
-                    currencySelect.value = currency.code;
-                    handleCalculationAndChartUpdate();
-                });
-                currencyList.appendChild(item);
-            });
-            continentWrapper.appendChild(currencyList);
-            currencyGrid.appendChild(continentWrapper);
-        }
-    });
-
-    // --- 対応通貨リストの表示 ---
-    const fetchAndDisplaySupportedCurrencies = async () => {
-        try {
-            const response = await fetch('https://api.frankfurter.app/currencies');
-            if (!response.ok) throw new Error('対応通貨リストの取得に失敗しました。');
-            const supportedCurrencies = await response.json();
-            
-            supportedCurrenciesList.innerHTML = ''; // Clear existing list
-            for (const code in supportedCurrencies) {
-                const listItem = document.createElement('li');
-                listItem.textContent = `${code}: ${supportedCurrencies[code]}`;
-                supportedCurrenciesList.appendChild(listItem);
-            }
-        } catch (error) {
-            console.error('対応通貨リストの取得エラー:', error);
-            supportedCurrenciesList.innerHTML = '<li>リストの取得に失敗しました。</li>';
-        }
-    };
-
     // --- 為替レート計算 (Frankfurter API) ---
     const getRate = async (currency, date = 'latest') => {
         resultOutput.textContent = '計算中...';
         const url = `https://api.frankfurter.app/${date}?from=${currency}&to=JPY`;
+        console.log(`Fetching rate from: ${url}`); // for debugging
 
         try {
             const response = await fetch(url);
@@ -261,6 +185,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             
             if (!data.rates || !data.rates.JPY) {
+                // If today's rate is not available, try yesterday
+                if (date === formatDate(today)) {
+                    const yesterday = new Date();
+                    yesterday.setDate(today.getDate() - 1);
+                    return getRate(currency, formatDate(yesterday));
+                }
                 throw new Error('有効なレートを取得できませんでした。');
             }
             return data.rates.JPY;
@@ -342,9 +272,58 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error('チャートAPIエラー:', error);
         }
     };
+    
+    const generateCurrencyGrid = () => {
+        currencyGrid.innerHTML = '';
+        const currenciesByContinent = currencies.reduce((acc, currency) => {
+            if (!acc[currency.continent]) { acc[currency.continent] = []; }
+            acc[currency.continent].push(currency);
+            return acc;
+        }, {});
 
-    // --- イベントハンドラ ---
-    const handleCalculationAndChartUpdate = () => {
+        const continentOrder = ['アジア', 'ヨーロッパ', '北米', '中南米', 'アフリカ', '中東・オセアニア'];
+        continentOrder.forEach(continent => {
+            if (currenciesByContinent[continent]) {
+                const continentWrapper = document.createElement('details');
+                continentWrapper.classList.add('continent-section');
+                
+                const continentTitle = document.createElement('summary');
+                continentTitle.textContent = continent;
+                continentWrapper.appendChild(continentTitle);
+                const currencyList = document.createElement('ul');
+                currenciesByContinent[continent].forEach(currency => {
+                    const item = document.createElement('li');
+                    item.classList.add('currency-item');
+                    item.dataset.code = currency.code;
+                    item.innerHTML = `${currency.name} <span class="code">${currency.code}</span>`;
+                    item.addEventListener('click', () => {
+                        let optionExists = false;
+                        for (let i = 0; i < currencySelect.options.length; i++) {
+                            if (currencySelect.options[i].value === currency.code) {
+                                optionExists = true;
+                                break;
+                            }
+                        }
+
+                        if (!optionExists) {
+                            const option = document.createElement('option');
+                            option.value = currency.code;
+                            option.textContent = `${currency.name} (${currency.code})`;
+                            currencySelect.appendChild(option);
+                        }
+
+                        currencySelect.value = currency.code;
+                        handleCurrencyChange();
+                    });
+                    currencyList.appendChild(item);
+                });
+                continentWrapper.appendChild(currencyList);
+                currencyGrid.appendChild(continentWrapper);
+            }
+        });
+    };
+
+    const handleCurrencyChange = () => {
         calculateRate();
         const currency = currencySelect.value;
         const startDate = startDateInput.value;
@@ -352,9 +331,35 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchChartData(currency, startDate, endDate);
     };
 
+    const initializeApp = async () => {
+        try {
+            const response = await fetch('https://api.frankfurter.app/currencies');
+            const supportedCurrencies = await response.json();
+            currencies = initialCurrencies.filter(c => supportedCurrencies[c.code]);
+        } catch (error) {
+            console.error("Failed to fetch supported currencies, using local list.", error);
+            currencies = initialCurrencies;
+        }
+        
+        generateCurrencyGrid();
+
+        const majorCurrencies = currencies.filter(c => c.major);
+        majorCurrencies.forEach(currency => {
+            const option = document.createElement('option');
+            option.value = currency.code;
+            option.textContent = `${currency.name} (${currency.code})`;
+            if (currency.code === 'USD') { option.selected = true; }
+            currencySelect.appendChild(option);
+        });
+        
+        handleCurrencyChange();
+    };
+
+
+    // --- イベントハンドラ ---
     amountInput.addEventListener('input', calculateRate);
-    dateInput.addEventListener('change', handleCalculationAndChartUpdate);
-    currencySelect.addEventListener('change', handleCalculationAndChartUpdate);
+    dateInput.addEventListener('change', calculateRate);
+    currencySelect.addEventListener('change', handleCurrencyChange);
     updateChartBtn.addEventListener('click', () => {
         const currency = currencySelect.value;
         const startDate = startDateInput.value;
@@ -363,9 +368,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- 初期化処理 ---
-    handleCalculationAndChartUpdate();
-    fetchAndDisplaySupportedCurrencies();
-
+    initializeApp();
+    
     // --- チャートへ移動ボタンの処理 ---
     const gotoChartBtn = document.getElementById('goto-chart-btn');
     const chartContainer = document.getElementById('chart-container');
