@@ -173,34 +173,69 @@ document.addEventListener('DOMContentLoaded', () => {
     startDateInput.value = formatDate(thirtyDaysAgo);
     endDateInput.value = formatDate(today);
 
-    // --- 為替レート計算 (Frankfurter API) ---
+    // --- API ---
+    const API_BASE_URL = 'https://api.frankfurter.app';
+
+    const fetchSupportedCurrencies = async () => {
+        try {
+            const response = await fetch(`${API_BASE_URL}/currencies`);
+            if (!response.ok) throw new Error('対応通貨の取得に失敗しました。');
+            return await response.json();
+        } catch (error) {
+            console.error(error);
+            return null;
+        }
+    };
+
     const getRate = async (currency, date = 'latest') => {
         resultOutput.textContent = '計算中...';
-        const url = `https://api.frankfurter.app/${date}?from=${currency}&to=JPY`;
-        console.log(`Fetching rate from: ${url}`); // for debugging
+        const url = `${API_BASE_URL}/${date}?from=${currency}&to=JPY`;
 
         try {
             const response = await fetch(url);
-            if (!response.ok) throw new Error('ネットワークエラー');
-            const data = await response.json();
-            
-            if (!data.rates || !data.rates.JPY) {
-                // If today's rate is not available, try yesterday
-                if (date === formatDate(today)) {
-                    const yesterday = new Date();
-                    yesterday.setDate(today.getDate() - 1);
-                    return getRate(currency, formatDate(yesterday));
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error(`選択された日付のレートはありません: ${date}`);
                 }
+                throw new Error('ネットワークエラー');
+            }
+            const data = await response.json();
+            if (!data.rates || !data.rates.JPY) {
                 throw new Error('有効なレートを取得できませんでした。');
             }
             return data.rates.JPY;
         } catch (error) {
             console.error('APIエラー:', error);
-            resultOutput.textContent = '取得不可';
+            resultOutput.textContent = error.message;
             return null;
         }
     };
 
+    const fetchChartData = async (currency, start, end) => {
+        if (currency === 'JPY') {
+            drawChart([start, end], [1, 1], currency);
+            return;
+        }
+        const url = `${API_BASE_URL}/${start}..${end}?from=${currency}&to=JPY`;
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('ネットワークエラー');
+            const data = await response.json();
+            if (!data.rates) {
+                drawChart([], [], currency);
+                throw new Error('チャートデータの取得に失敗しました。');
+            }
+            const rates = data.rates;
+            const labels = Object.keys(rates).sort();
+            const chartData = labels.map(label => rates[label].JPY);
+            drawChart(labels, chartData, currency);
+        } catch (error) {
+            console.error('チャートAPIエラー:', error);
+        }
+    };
+
+    // --- UI 更新 ---
     const calculateRate = async () => {
         const amount = parseFloat(amountInput.value);
         const currency = currencySelect.value;
@@ -221,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // --- チャート処理 (Frankfurter API) ---
     const drawChart = (labels, data, currency) => {
         if (rateChart) {
             rateChart.destroy();
@@ -246,83 +280,40 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     };
 
-    const fetchChartData = async (currency, start, end) => {
-        if (currency === 'JPY') {
-            drawChart([start, end], [1, 1], currency);
-            return;
-        }
-        const url = `https://api.frankfurter.app/${start}..${end}?from=${currency}&to=JPY`;
-
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error('ネットワークエラー');
-            const data = await response.json();
-
-            if (!data.rates) {
-                drawChart([], [], currency);
-                throw new Error('チャートデータの取得に失敗しました。');
-            }
-
-            const rates = data.rates;
-            const labels = Object.keys(rates).sort();
-            const chartData = labels.map(label => rates[label].JPY);
-
-            drawChart(labels, chartData, currency);
-        } catch (error) {
-            console.error('チャートAPIエラー:', error);
-        }
-    };
-    
     const generateCurrencyGrid = () => {
         currencyGrid.innerHTML = '';
-        const currenciesByContinent = currencies.reduce((acc, currency) => {
-            if (!acc[currency.continent]) { acc[currency.continent] = []; }
-            acc[currency.continent].push(currency);
-            return acc;
-        }, {});
+        const currencyList = document.createElement('ul');
+        currencyList.style.listStyle = 'none';
+        currencyList.style.padding = '0';
 
-        const continentOrder = ['アジア', 'ヨーロッパ', '北米', '中南米', 'アフリカ', '中東・オセアニア'];
-        continentOrder.forEach(continent => {
-            if (currenciesByContinent[continent]) {
-                const continentWrapper = document.createElement('div');
-                continentWrapper.classList.add('continent-section');
-                
-                const continentTitle = document.createElement('h3');
-                continentTitle.textContent = continent;
-                continentWrapper.appendChild(continentTitle);
-                const currencyList = document.createElement('ul');
-                currenciesByContinent[continent].forEach(currency => {
-                    const item = document.createElement('li');
-                    item.classList.add('currency-item');
-                    item.dataset.code = currency.code;
-                    item.innerHTML = `${currency.name} <span class="code">${currency.code}</span>`;
-                    item.addEventListener('click', () => {
-                        let optionExists = false;
-                        for (let i = 0; i < currencySelect.options.length; i++) {
-                            if (currencySelect.options[i].value === currency.code) {
-                                optionExists = true;
-                                break;
-                            }
-                        }
-
-                        if (!optionExists) {
-                            const option = document.createElement('option');
-                            option.value = currency.code;
-                            option.textContent = `${currency.name} (${currency.code})`;
-                            currencySelect.appendChild(option);
-                        }
-
-                        currencySelect.value = currency.code;
-                        handleCurrencyChange();
-                    });
-                    currencyList.appendChild(item);
-                });
-                continentWrapper.appendChild(currencyList);
-                currencyGrid.appendChild(continentWrapper);
-            }
+        currencies.forEach(currency => {
+            const item = document.createElement('li');
+            item.classList.add('currency-item');
+            item.dataset.code = currency.code;
+            item.innerHTML = `${currency.flag} ${currency.name} <span class="code">${currency.code}</span>`;
+            item.addEventListener('click', () => {
+                let optionExists = false;
+                for (let i = 0; i < currencySelect.options.length; i++) {
+                    if (currencySelect.options[i].value === currency.code) {
+                        optionExists = true;
+                        break;
+                    }
+                }
+                if (!optionExists) {
+                    const option = document.createElement('option');
+                    option.value = currency.code;
+                    option.textContent = `${currency.name} (${currency.code})`;
+                    currencySelect.appendChild(option);
+                }
+                currencySelect.value = currency.code;
+                handleCurrencyChange();
+            });
+            currencyList.appendChild(item);
         });
+        currencyGrid.appendChild(currencyList);
     };
 
+    // --- イベントハンドラ ---
     const handleCurrencyChange = () => {
         calculateRate();
         const currency = currencySelect.value;
@@ -332,12 +323,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const initializeApp = async () => {
-        try {
-            const response = await fetch('https://api.frankfurter.app/currencies');
-            const supportedCurrencies = await response.json();
+        const supportedCurrencies = await fetchSupportedCurrencies();
+        if (supportedCurrencies) {
             currencies = initialCurrencies.filter(c => supportedCurrencies[c.code]);
-        } catch (error) {
-            console.error("Failed to fetch supported currencies, using local list.", error);
+        } else {
+            // Fallback to the full list if API fails
             currencies = initialCurrencies;
         }
         
@@ -355,8 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
         handleCurrencyChange();
     };
 
-
-    // --- イベントハンドラ ---
+    // --- イベントリスナー ---
     amountInput.addEventListener('input', calculateRate);
     dateInput.addEventListener('change', calculateRate);
     currencySelect.addEventListener('change', handleCurrencyChange);
@@ -367,9 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
         fetchChartData(currency, startDate, endDate);
     });
 
-    // --- 初期化処理 ---
+    // --- 初期化 ---
     initializeApp();
-    
+
     // --- チャートへ移動ボタンの処理 ---
     const gotoChartBtn = document.getElementById('goto-chart-btn');
     const chartContainer = document.getElementById('chart-container');
