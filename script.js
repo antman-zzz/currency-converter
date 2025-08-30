@@ -231,17 +231,10 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- 為替レート計算 (Frankfurter API) ---
-    async function getRate(fromCurrency, toCurrency, date = 'latest') {
+    async function getRate(fromCurrency, toCurrency) {
     try {
-        let url;
         const apiKey = '77a9c8b77f9ed7790f0b8670'; // Your API Key
-
-        if (date === 'latest') {
-            url = `https://api.exchangerate-api.com/v4/pair/${fromCurrency}/${toCurrency}?apikey=${apiKey}`;
-        } else {
-            // For historical data, the endpoint is different
-            url = `https://api.exchangerate-api.com/v4/history/${date}/${fromCurrency}/${toCurrency}?apikey=${apiKey}`;
-        }
+        const url = `https://api.exchangerate-api.com/latest?base=${fromCurrency}&apikey=${apiKey}`;
 
         const response = await fetch(url);
         if (!response.ok) {
@@ -252,10 +245,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const data = await response.json();
 
-        if (data.result === 'success' && data.conversion_rate) {
-            return data.conversion_rate;
+        if (data.result === 'success' && data.rates && data.rates[toCurrency]) {
+            return data.rates[toCurrency];
         } else {
-            throw new Error(`レートデータの取得に失敗しました: ${data.result}`);
+            throw new Error(`レートデータの取得に失敗しました: ${data.result || 'データなし'}`);
         }
     } catch (error) {
         displayErrorMessage(`APIエラー: ${error.message}`);
@@ -301,7 +294,7 @@ function clearErrorMessage() {
         }
 
         try {
-            const rate = await getRate(fromCurrency, toCurrency, selectedDate); // Pass the selected date
+            const rate = await getRate(fromCurrency, toCurrency); // No date parameter
             if (rate) {
                 const result = amount * rate;
                 resultOutput.textContent = result.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -341,73 +334,11 @@ function clearErrorMessage() {
 
     const fetchChartData = async (fromCurrency, start, end) => {
         clearErrorMessage();
-        const toCurrency = 'JPY';
-        const apiKey = '77a9c8b77f9ed7790f0b8670';
-
-        // Hide chart and show message initially
-        chartWrapper.classList.remove('chart-unavailable');
-        chartUnavailableMessageDiv.style.display = 'none';
-
-        if (fromCurrency === toCurrency) {
-            drawChart([start, end], [1, 1], fromCurrency);
-            // For same currency, we can still show the chart, so no unavailable state
-            return;
-        }
-
-        const dates = [];
-        let currentDate = new Date(start);
-        const endDate = new Date(end);
-
-        while (currentDate <= endDate) {
-            dates.push(currentDate.toISOString().split('T')[0]);
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-
-        const chartLabels = [];
-        const chartData = [];
-
-        if (dates.length > 7) {
-            displayErrorMessage(`注意: チャートデータの取得には、選択された期間の日数分のAPI呼び出しが必要です。無料プランのAPI制限にすぐに達する可能性があります。`);
-        }
-
-        let hasError = false;
-        for (const date of dates) {
-            try {
-                const url = `https://api.exchangerate-api.com/v4/history/${date}/${fromCurrency}/${toCurrency}?apikey=${apiKey}`;
-                const response = await fetch(url);
-                if (!response.ok) {
-                    console.warn(`Failed to fetch historical data for ${date}: ${response.statusText}`);
-                    hasError = true; // Mark that an error occurred
-                    continue;
-                }
-                const data = await response.json();
-
-                if (data.result === 'success' && data.conversion_rate) {
-                    chartLabels.push(date);
-                    chartData.push(data.conversion_rate);
-                } else {
-                    console.warn(`No conversion rate for ${date} from ${fromCurrency} to ${toCurrency}: ${data.result}`);
-                    hasError = true; // Mark that an error occurred
-                }
-            } catch (error) {
-                console.error(`Error fetching historical data for ${date}:`, error);
-                displayErrorMessage(`チャートデータの取得中にエラーが発生しました: ${error.message}`);
-                hasError = true; // Mark that an error occurred
-                break;
-            }
-        }
-
-        if (chartLabels.length > 0) {
-            drawChart(chartLabels, chartData, fromCurrency);
-        } else {
-            // If no data or errors, show unavailable state
-            drawChart([], [], fromCurrency); // Clear chart
-            chartWrapper.classList.add('chart-unavailable');
-            chartUnavailableMessageDiv.style.display = 'block';
-            if (!hasError) { // If no specific error, but no data, provide a generic message
-                displayErrorMessage(`チャートデータの取得に失敗しました。選択された期間のデータが利用できないか、API制限に達した可能性があります。`);
-            }
-        }
+        // Always show chart unavailable message for historical data in free tier
+        drawChart([], [], fromCurrency); // Clear any existing chart
+        chartWrapper.classList.add('chart-unavailable');
+        chartUnavailableMessageDiv.style.display = 'block';
+        displayErrorMessage(`チャートデータは利用できません。ExchangeRate-APIの無料プランでは、履歴データ（チャート）は提供されていません。`);
     };
 
     // --- イベントハンドラ ---
