@@ -284,10 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const continentOrder = ['アジア', 'ヨーロッパ', '北米', '中南米', 'アフリカ', '中東・オセアニア'];
         continentOrder.forEach(continent => {
             if (currenciesByContinent[continent]) {
-                const continentWrapper = document.createElement('details');
+                const continentWrapper = document.createElement('div');
                 continentWrapper.classList.add('continent-section');
                 
-                const continentTitle = document.createElement('summary');
+                const continentTitle = document.createElement('h3');
                 continentTitle.textContent = continent;
                 continentWrapper.appendChild(continentTitle);
                 const currencyList = document.createElement('ul');
