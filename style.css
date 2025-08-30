@@ -234,8 +234,8 @@ footer a:hover {
 }
 
 /* PCサイズでの通貨一覧を4列表示に */
-@media (min-width: 1024px) {
+@media (min-width: 769px) { /* Changed min-width */
     #currency-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(4, 1fr) !important; /* Added !important */
     }
 }
