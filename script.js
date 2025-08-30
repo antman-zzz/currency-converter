@@ -160,8 +160,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDateInput = document.getElementById('start-date');
     const endDateInput = document.getElementById('end-date');
     const updateChartBtn = document.getElementById('update-chart');
-    const chartWrapper = document.querySelector('.chart-wrapper'); // Get the chart wrapper
-    const chartUnavailableMessageDiv = document.getElementById('chart-unavailable-message'); // Get the message div
+    const chartWrapper = document.querySelector('.chart-wrapper');
+    const chartUnavailableMessageDiv = document.getElementById('chart-unavailable-message');
+    const supportedCurrenciesList = document.getElementById('supported-currencies-list');
 
     // --- 初期設定 ---
     const today = new Date();
@@ -230,10 +231,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- 対応通貨リストの表示 ---
+    const fetchAndDisplaySupportedCurrencies = async () => {
+        try {
+            const response = await fetch('https://api.frankfurter.app/currencies');
+            if (!response.ok) throw new Error('対応通貨リストの取得に失敗しました。');
+            const supportedCurrencies = await response.json();
+            
+            supportedCurrenciesList.innerHTML = ''; // Clear existing list
+            for (const code in supportedCurrencies) {
+                const listItem = document.createElement('li');
+                listItem.textContent = `${code}: ${supportedCurrencies[code]}`;
+                supportedCurrenciesList.appendChild(listItem);
+            }
+        } catch (error) {
+            console.error('対応通貨リストの取得エラー:', error);
+            supportedCurrenciesList.innerHTML = '<li>リストの取得に失敗しました。</li>';
+        }
+    };
+
     // --- 為替レート計算 (Frankfurter API) ---
-    const getRate = async (currency) => {
+    const getRate = async (currency, date = 'latest') => {
         resultOutput.textContent = '計算中...';
-        const url = `https://api.frankfurter.app/latest?from=${currency}&to=JPY`;
+        const url = `https://api.frankfurter.app/${date}?from=${currency}&to=JPY`;
 
         try {
             const response = await fetch(url);
@@ -254,6 +274,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const calculateRate = async () => {
         const amount = parseFloat(amountInput.value);
         const currency = currencySelect.value;
+        const selectedDate = dateInput.value;
+
         if (isNaN(amount) || amount < 0) {
             resultOutput.textContent = '---';
             return;
@@ -262,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
             resultOutput.textContent = amount.toLocaleString();
             return;
         }
-        const rate = await getRate(currency);
+        const rate = await getRate(currency, selectedDate);
         if (rate) {
             const result = amount * rate;
             resultOutput.textContent = result.toLocaleString(undefined, { maximumFractionDigits: 2 });
@@ -342,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- 初期化処理 ---
     handleCalculationAndChartUpdate();
+    fetchAndDisplaySupportedCurrencies();
 
     // --- チャートへ移動ボタンの処理 ---
     const gotoChartBtn = document.getElementById('goto-chart-btn');
