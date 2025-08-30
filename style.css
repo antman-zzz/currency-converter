@@ -89,6 +89,23 @@ h2 {
     height: 400px;
 }
 
+.chart-wrapper.chart-unavailable {
+    background-color: #f0f0f0; /* Light gray background */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    border: 1px dashed #ccc;
+    border-radius: 8px;
+}
+
+.chart-unavailable-message {
+    color: #777;
+    font-size: 1.2rem;
+    margin-top: 10px;
+}
+
 /* 通貨選択グリッド */
 #currency-grid {
     display: grid;

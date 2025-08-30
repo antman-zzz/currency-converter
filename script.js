@@ -160,6 +160,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const startDateInput = document.getElementById('start-date');
     const endDateInput = document.getElementById('end-date');
     const updateChartBtn = document.getElementById('update-chart');
+    const chartWrapper = document.querySelector('.chart-wrapper'); // Get the chart wrapper
+    const chartUnavailableMessageDiv = document.getElementById('chart-unavailable-message'); // Get the message div
 
     // --- 初期設定 ---
     const today = new Date();
@@ -231,19 +233,33 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 為替レート計算 (Frankfurter API) ---
     async function getRate(fromCurrency, toCurrency, date = 'latest') {
     try {
-        const url = `https://api.frankfurter.app/${date}?from=${fromCurrency}&to=${toCurrency}`;
+        let url;
+        const apiKey = '77a9c8b77f9ed7790f0b8670'; // Your API Key
+
+        if (date === 'latest') {
+            url = `https://api.exchangerate-api.com/v4/pair/${fromCurrency}/${toCurrency}?apikey=${apiKey}`;
+        } else {
+            // For historical data, the endpoint is different
+            url = `https://api.exchangerate-api.com/v4/history/${date}/${fromCurrency}/${toCurrency}?apikey=${apiKey}`;
+        }
+
         const response = await fetch(url);
         if (!response.ok) {
             if (response.status === 404) {
-                throw new Error(`選択された通貨の換算は利用できません: ${fromCurrency} から ${toCurrency}`);
+                throw new Error(`選択された通貨の換算は利用できません: ${fromCurrency} から ${toCurrency} (APIエラー: 404)`);
             }
             throw new Error('ネットワークエラー');
         }
         const data = await response.json();
-        return data.rates[toCurrency];
+
+        if (data.result === 'success' && data.conversion_rate) {
+            return data.conversion_rate;
+        } else {
+            throw new Error(`レートデータの取得に失敗しました: ${data.result}`);
+        }
     } catch (error) {
         displayErrorMessage(`APIエラー: ${error.message}`);
-        throw error; // Re-throw to propagate the error to the caller
+        throw error;
     }
 }
 
@@ -323,40 +339,74 @@ function clearErrorMessage() {
         });
     };
 
-    const fetchChartData = async (fromCurrency, start, end) => { // Renamed currency to fromCurrency for clarity
-        clearErrorMessage(); // Clear previous errors
-        const toCurrency = 'JPY'; // Always convert to JPY for chart
+    const fetchChartData = async (fromCurrency, start, end) => {
+        clearErrorMessage();
+        const toCurrency = 'JPY';
+        const apiKey = '77a9c8b77f9ed7790f0b8670';
+
+        // Hide chart and show message initially
+        chartWrapper.classList.remove('chart-unavailable');
+        chartUnavailableMessageDiv.style.display = 'none';
 
         if (fromCurrency === toCurrency) {
             drawChart([start, end], [1, 1], fromCurrency);
+            // For same currency, we can still show the chart, so no unavailable state
             return;
         }
 
-        const url = `https://api.frankfurter.app/${start}..${end}?from=${fromCurrency}&to=${toCurrency}`;
+        const dates = [];
+        let currentDate = new Date(start);
+        const endDate = new Date(end);
 
-        try {
-            const response = await fetch(url);
-            if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error(`選択された通貨のチャートデータは利用できません: ${fromCurrency} から ${toCurrency}`);
+        while (currentDate <= endDate) {
+            dates.push(currentDate.toISOString().split('T')[0]);
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        const chartLabels = [];
+        const chartData = [];
+
+        if (dates.length > 7) {
+            displayErrorMessage(`注意: チャートデータの取得には、選択された期間の日数分のAPI呼び出しが必要です。無料プランのAPI制限にすぐに達する可能性があります。`);
+        }
+
+        let hasError = false;
+        for (const date of dates) {
+            try {
+                const url = `https://api.exchangerate-api.com/v4/history/${date}/${fromCurrency}/${toCurrency}?apikey=${apiKey}`;
+                const response = await fetch(url);
+                if (!response.ok) {
+                    console.warn(`Failed to fetch historical data for ${date}: ${response.statusText}`);
+                    hasError = true; // Mark that an error occurred
+                    continue;
                 }
-                throw new Error('ネットワークエラー');
+                const data = await response.json();
+
+                if (data.result === 'success' && data.conversion_rate) {
+                    chartLabels.push(date);
+                    chartData.push(data.conversion_rate);
+                } else {
+                    console.warn(`No conversion rate for ${date} from ${fromCurrency} to ${toCurrency}: ${data.result}`);
+                    hasError = true; // Mark that an error occurred
+                }
+            } catch (error) {
+                console.error(`Error fetching historical data for ${date}:`, error);
+                displayErrorMessage(`チャートデータの取得中にエラーが発生しました: ${error.message}`);
+                hasError = true; // Mark that an error occurred
+                break;
             }
-            const data = await response.json();
+        }
 
-            if (!data.rates) {
-                drawChart([], [], fromCurrency);
-                throw new Error('チャートデータの取得に失敗しました。');
+        if (chartLabels.length > 0) {
+            drawChart(chartLabels, chartData, fromCurrency);
+        } else {
+            // If no data or errors, show unavailable state
+            drawChart([], [], fromCurrency); // Clear chart
+            chartWrapper.classList.add('chart-unavailable');
+            chartUnavailableMessageDiv.style.display = 'block';
+            if (!hasError) { // If no specific error, but no data, provide a generic message
+                displayErrorMessage(`チャートデータの取得に失敗しました。選択された期間のデータが利用できないか、API制限に達した可能性があります。`);
             }
-
-            const rates = data.rates;
-            const labels = Object.keys(rates).sort();
-            const chartData = labels.map(label => rates[label][toCurrency]); // Use toCurrency here
-
-            drawChart(labels, chartData, fromCurrency);
-        } catch (error) {
-            displayErrorMessage(`チャートAPIエラー: ${error.message}`);
-            // console.error('チャートAPIエラー:', error); // Remove this as displayErrorMessage handles it
         }
     };
 
