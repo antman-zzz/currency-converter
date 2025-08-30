@@ -231,79 +231,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- 為替レート計算 (Frankfurter API) ---
-    async function getRate(fromCurrency, toCurrency) {
-    try {
-        const apiKey = '77a9c8b77f9ed7790f0b8670'; // Your API Key
-        const url = `https://api.exchangerate-api.com/latest?base=${fromCurrency}&apikey=${apiKey}`;
-
-        const response = await fetch(url);
-        if (!response.ok) {
-            if (response.status === 404) {
-                throw new Error(`選択された通貨の換算は利用できません: ${fromCurrency} から ${toCurrency} (APIエラー: 404)`);
-            }
-            throw new Error('ネットワークエラー');
-        }
-        const data = await response.json();
-
-        if (data.result === 'success' && data.rates && data.rates[toCurrency]) {
-            return data.rates[toCurrency];
-        } else {
-            throw new Error(`レートデータの取得に失敗しました: ${data.result || 'データなし'}`);
-        }
-    } catch (error) {
-        displayErrorMessage(`APIエラー: ${error.message}`);
-        throw error;
-    }
-}
-
-// Add a function to display error messages
-function displayErrorMessage(message) {
-    const errorMessageElement = document.getElementById('errorMessage');
-    if (errorMessageElement) {
-        errorMessageElement.textContent = message;
-        errorMessageElement.style.display = 'block';
-    } else {
-        console.error("Error message element not found:", message);
-    }
-}
-
-// Clear error message
-function clearErrorMessage() {
-    const errorMessageElement = document.getElementById('errorMessage');
-    if (errorMessageElement) {
-        errorMessageElement.textContent = '';
-        errorMessageElement.style.display = 'none';
-    }
-}
-
-    const calculateRate = async () => {
-        clearErrorMessage(); // Clear previous errors
-        const amount = parseFloat(amountInput.value);
-        const fromCurrency = currencySelect.value; // This is the 'from' currency
-        const toCurrency = 'JPY'; // Always convert to JPY
-        const selectedDate = dateInput.value; // Get the selected date
-
-        if (isNaN(amount) || amount <= 0) {
-            resultOutput.textContent = '有効な金額を入力してください';
-            return;
-        }
-
-        if (fromCurrency === toCurrency) {
-            resultOutput.textContent = amount.toLocaleString(undefined, { maximumFractionDigits: 2 });
-            return;
-        }
+    const getRate = async (currency) => {
+        resultOutput.textContent = '計算中...';
+        const url = `https://api.frankfurter.app/latest?from=${currency}&to=JPY`;
 
         try {
-            const rate = await getRate(fromCurrency, toCurrency); // No date parameter
-            if (rate) {
-                const result = amount * rate;
-                resultOutput.textContent = result.toLocaleString(undefined, { maximumFractionDigits: 2 });
-            } else {
-                resultOutput.textContent = 'レートを取得できませんでした。';
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('ネットワークエラー');
+            const data = await response.json();
+            
+            if (!data.rates || !data.rates.JPY) {
+                throw new Error('有効なレートを取得できませんでした。');
             }
+            return data.rates.JPY;
         } catch (error) {
-            // Error already displayed by displayErrorMessage in getRate
-            resultOutput.textContent = '計算できませんでした。';
+            console.error('APIエラー:', error);
+            resultOutput.textContent = '取得不可';
+            return null;
+        }
+    };
+
+    const calculateRate = async () => {
+        const amount = parseFloat(amountInput.value);
+        const currency = currencySelect.value;
+        if (isNaN(amount) || amount < 0) {
+            resultOutput.textContent = '---';
+            return;
+        }
+        if (currency === 'JPY') {
+            resultOutput.textContent = amount.toLocaleString();
+            return;
+        }
+        const rate = await getRate(currency);
+        if (rate) {
+            const result = amount * rate;
+            resultOutput.textContent = result.toLocaleString(undefined, { maximumFractionDigits: 2 });
         }
     };
 
@@ -332,22 +294,40 @@ function clearErrorMessage() {
         });
     };
 
-    const fetchChartData = async (fromCurrency, start, end) => {
-        clearErrorMessage();
-        // Always show chart unavailable message for historical data in free tier
-        drawChart([], [], fromCurrency); // Clear any existing chart
-        chartWrapper.classList.add('chart-unavailable');
-        chartUnavailableMessageDiv.style.display = 'block';
-        displayErrorMessage(`チャートデータは利用できません。ExchangeRate-APIの無料プランでは、履歴データ（チャート）は提供されていません。`);
+    const fetchChartData = async (currency, start, end) => {
+        if (currency === 'JPY') {
+            drawChart([start, end], [1, 1], currency);
+            return;
+        }
+        const url = `https://api.frankfurter.app/${start}..${end}?from=${currency}&to=JPY`;
+
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('ネットワークエラー');
+            const data = await response.json();
+
+            if (!data.rates) {
+                drawChart([], [], currency);
+                throw new Error('チャートデータの取得に失敗しました。');
+            }
+
+            const rates = data.rates;
+            const labels = Object.keys(rates).sort();
+            const chartData = labels.map(label => rates[label].JPY);
+
+            drawChart(labels, chartData, currency);
+        } catch (error) {
+            console.error('チャートAPIエラー:', error);
+        }
     };
 
     // --- イベントハンドラ ---
     const handleCalculationAndChartUpdate = () => {
         calculateRate();
-        const fromCurrency = currencySelect.value; // Get the 'from' currency
+        const currency = currencySelect.value;
         const startDate = startDateInput.value;
         const endDate = endDateInput.value;
-        fetchChartData(fromCurrency, startDate, endDate); // Pass fromCurrency
+        fetchChartData(currency, startDate, endDate);
     };
 
     amountInput.addEventListener('input', calculateRate);
