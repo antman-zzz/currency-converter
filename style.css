@@ -239,3 +239,41 @@ footer a:hover {
         grid-template-columns: repeat(4, 1fr) !important; /* Added !important */
     }
 }
+
+/* 紹介リンク */
+.pr-links {
+    background-color: #fff;
+    padding: 1.5rem;
+    border-radius: 8px;
+    margin-bottom: 2rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.pr-links h3 {
+    margin-top: 0;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 0.5rem;
+    color: #34495e;
+}
+
+.pr-links ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+}
+
+.pr-links li {
+    margin-bottom: 0.5rem;
+}
+
+.pr-links a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.pr-links a:hover {
+    text-decoration: underline;
+}
